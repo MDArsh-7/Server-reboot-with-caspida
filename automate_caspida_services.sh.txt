@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# Ensure the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+  echo "This script must be run as root. Use sudo or switch to root."
+  exit 1
+fi
+
+# Variables
+STARTUP_SCRIPT="/usr/local/bin/caspida_startup.sh"
+SHUTDOWN_SCRIPT="/usr/local/bin/caspida_shutdown.sh"
+STARTUP_SERVICE="/etc/systemd/system/caspida_startup.service"
+SHUTDOWN_SERVICE="/etc/systemd/system/caspida_shutdown.service"
+
+# Create the startup script
+echo "Creating startup script: $STARTUP_SCRIPT"
+cat <<EOF > "$STARTUP_SCRIPT"
+#!/bin/bash
+su - caspida -c "/opt/caspida/bin/Caspida start-all"
+EOF
+
+# Create the shutdown script
+echo "Creating shutdown script: $SHUTDOWN_SCRIPT"
+cat <<EOF > "$SHUTDOWN_SCRIPT"
+#!/bin/bash
+su - caspida -c "/opt/caspida/bin/Caspida stop-all"
+EOF
+
+# Set executable permissions for both scripts
+echo "Setting executable permissions..."
+chmod +x "$STARTUP_SCRIPT"
+chmod +x "$SHUTDOWN_SCRIPT"
+
+# Create the startup service
+echo "Creating systemd service for startup: $STARTUP_SERVICE"
+cat <<EOF > "$STARTUP_SERVICE"
+[Unit]
+Description=Start Caspida on boot
+[Service]
+Type=oneshot
+ExecStart=$STARTUP_SCRIPT
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Create the shutdown service
+echo "Creating systemd service for shutdown: $SHUTDOWN_SERVICE"
+cat <<EOF > "$SHUTDOWN_SERVICE"
+[Unit]
+Description=Stop Caspida on shutdown
+[Service]
+Type=oneshot
+ExecStart=$SHUTDOWN_SCRIPT
+RemainAfterExit=yes
+[Install]
+WantedBy=halt.target reboot.target
+EOF
+
+# Reload systemd daemon to recognize new services
+echo "Reloading systemd daemon..."
+systemctl daemon-reload
+
+# Enable the services to start on boot and stop on shutdown
+echo "Enabling Caspida startup and shutdown services..."
+systemctl enable caspida_startup.service
+systemctl enable caspida_shutdown.service
+
+echo "Setup completed successfully."
